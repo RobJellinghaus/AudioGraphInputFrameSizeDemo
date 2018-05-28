@@ -63,10 +63,21 @@ public: // sound generation
     double _sineWavePhase;
 
     // sample rate of audio graph
-    int _sampleRateHz;
+    uint32_t _sampleRateHz;
+    // channel count of audio graph
+    uint32_t _channelCount;
+
+    // Total sample count measured by audio graph quantumstarted events * audio graph required samples.
+    uint32_t _audioGraphQuantumSampleCount;
+
+    // Total sample count measured by required samples for audio frame input node.
+    uint32_t _audioInputFrameSampleCount;
+
+    // The audio input frame length (in samples), set from the slider.
+    uint32_t _audioInputFrameLengthInSamples;
 
     // bytes per sample (channel count * sample size in bytes)
-    int _bytesPerSample;
+    uint32_t _bytesPerSample;
 
     winrt::Windows::Media::Audio::AudioGraph _audioGraph{ nullptr };
     winrt::Windows::Media::Audio::AudioFrameInputNode _audioFrameInputNode{ nullptr };

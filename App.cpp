@@ -63,6 +63,7 @@ void App::OnLaunched(LaunchActivatedEventArgs const&)
     _minimumAudioFrameSize.Text(L"_");
     sliderPanel.Children().Append(_minimumAudioFrameSize);
     _audioFrameSizeSlider = Slider();
+    _audioFrameSizeSlider.MinWidth(300);
     sliderPanel.Children().Append(_audioFrameSizeSlider);
     _maximumAudioFrameSize = TextBlock();
     _maximumAudioFrameSize.Text(L"_");
@@ -95,21 +96,32 @@ fire_and_forget App::LaunchedAsync()
     int latencyInSamples = audioGraph.LatencyInSamples();
     int samplesPerQuantum = audioGraph.SamplesPerQuantum();
     _sampleRateHz = audioGraph.EncodingProperties().SampleRate();
+    _channelCount = audioGraph.EncodingProperties().ChannelCount();
     // make sure we're float encoding
     Check(audioGraph.EncodingProperties().BitsPerSample() == sizeof(float) * 8);
     // make sure we're stereo output (only mode supported for this tiny demo)
-    Check(audioGraph.EncodingProperties().ChannelCount() == 2);
+    Check(_channelCount == 2);
 
     _audioGraph = audioGraph;
 
-    _bytesPerSample = sizeof(float) * 2;
+    _bytesPerSample = sizeof(float) * _channelCount;
 
+    // switch to UI thread to update UI, now that we know the audio graph's state
     co_await _uiThread;
     std::wstringstream wstr;
     wstr << L"Sample rate: " << _sampleRateHz
         << L"| Latency in samples: " << latencyInSamples
         << " | Samples per quantum: " << samplesPerQuantum;
     _textBlockGraphInfo.Text(wstr.str());
+
+    wstr = std::wstringstream{};
+    wstr << samplesPerQuantum;
+    _minimumAudioFrameSize.Text(wstr.str());
+    _audioFrameSizeSlider.Minimum(samplesPerQuantum);
+    _audioFrameSizeSlider.Maximum(_sampleRateHz * 2);
+    wstr = std::wstringstream{};
+    wstr << _audioFrameSizeSlider.Maximum();
+    _maximumAudioFrameSize.Text(wstr.str());
     co_await resume_background();
 
     // Create a device output node
@@ -119,15 +131,20 @@ fire_and_forget App::LaunchedAsync()
 
     AudioDeviceOutputNode deviceOutputNode = deviceOutputNodeResult.DeviceOutputNode();
 
+    _audioGraph.QuantumStarted([&](AudioGraph, IInspectable)
+    {
+        _audioGraphQuantumSampleCount += samplesPerQuantum;
+    });
+
     audioGraph.Start();
 
     // This must be called on the UI thread.
     co_await _uiThread;
-
     _textBlockGraphStatus.Text(L"Graph started");
-
     co_await resume_background();
 
+    // Create the frame input node AFTER the graph has started.
+    // (This is the scenario used by the app I'm writing, which has to work free of crackling/static issues in playback.)
     _audioFrameInputNode = audioGraph.CreateFrameInputNode();
     _audioFrameInputNode.QuantumStarted([&](AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
     {
@@ -135,6 +152,36 @@ fire_and_forget App::LaunchedAsync()
     });
     _audioFrameInputNode.AddOutgoingConnection(deviceOutputNode);
 
+    Check(_audioFrameInputNode.EncodingProperties().SampleRate() == _sampleRateHz);
+    Check(_audioFrameInputNode.EncodingProperties().ChannelCount() == _channelCount);
+
+    UpdateLoop();
+}
+
+fire_and_forget App::UpdateLoop()
+{
+    // infinite UI update loop
+    while (true)
+    {
+        // top of loop is always in background
+
+        // wait in intervals of 1/100 sec
+        co_await resume_after(TimeSpan((int)(TicksPerSecond * 0.01)));
+        
+        co_await _uiThread;
+
+        // Update audio input frame length from slider.  (Value() method evidently is not agile.)
+        _audioInputFrameLengthInSamples = (uint32_t)_audioFrameSizeSlider.Value();
+
+        std::wstringstream wstr{};
+        wstr << "Audio input frame length (samples): " << _audioInputFrameLengthInSamples
+            << " | Audio graph sample count: " << _audioGraphQuantumSampleCount
+            << " | Input frame sample count: " << _audioInputFrameSampleCount
+            << " | Zero byte frame count: " << _zeroByteOutgoingFrameCount;
+        _textBlockTimeInfo.Text(wstr.str());
+
+        co_await resume_background();
+    }
 }
 
 void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
@@ -150,21 +197,21 @@ void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNo
         return;
     }
 
-    // sender.DiscardQueuedFrames();
+    _audioInputFrameSampleCount += requiredSamples;
 
     DateTime dateTimeNow = DateTime::clock::now();
     TimeSpan sinceLast = dateTimeNow - _lastQuantumTime;
     _lastQuantumTime = dateTimeNow;
 
     // we are looping; let's play!
-    float samplesSinceLastQuantum = (float)sinceLast.count() * _sampleRateHz / TicksPerSecond;
+    // float samplesSinceLastQuantum = (float)sinceLast.count() * _sampleRateHz / TicksPerSecond;
+    // _requiredSamplesHistogram.Add(requiredSamples);
+    // _sinceLastSampleTimingHistogram.Add(samplesSinceLastQuantum);
 
-    //_requiredSamplesHistogram.Add(requiredSamples);
-    //_sinceLastSampleTimingHistogram.Add(samplesSinceLastQuantum);
+    uint32_t frameSizeInSamples = requiredSamples; // TODO: fix: _audioInputFrameLengthInSamples;
 
-    uint32_t frameSizeInSamples = requiredSamples;
-
-    Windows::Media::AudioFrame audioFrame(frameSizeInSamples * _bytesPerSample);
+    // Stereo float samples outbound in this audio frame.
+    Windows::Media::AudioFrame audioFrame(frameSizeInSamples * sizeof(float) * _channelCount);
 
     {
         // This nested scope sets the extent of the LockBuffer call below, which must close before the AddFrame call.
@@ -180,18 +227,17 @@ void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNo
         check_hresult(interop->GetBuffer(&dataInBytes, &capacityInBytes));
 
         Check((capacityInBytes % _bytesPerSample) == 0);
-        Check(capacityInBytes / _bytesPerSample == requiredSamples);
-
-        uint32_t samplesRemaining = requiredSamples;
+        Check(capacityInBytes / _bytesPerSample == frameSizeInSamples);
 
         float* data = (float*)dataInBytes;
-        const float amplitude = 0.8;
+        const double amplitude = 0.8;
         const int frequencyHz = 300;
         const double pi = std::acos(-1);
-        const float phaseIncrement = frequencyHz * 2 * pi / _sampleRateHz;
-        for (uint32_t i = 0; i < samplesRemaining; i++)
+        const double phaseIncrement = frequencyHz * 2 * pi / _sampleRateHz;
+        for (uint32_t i = 0; i < frameSizeInSamples; i++)
         {
-            data[i] = sin(_sineWavePhase);
+            // set both stereo channels to same sine value
+            data[i * 2] = data[i * 2 + 1] = (float)sin(_sineWavePhase);
             _sineWavePhase += phaseIncrement;
         }
     }
