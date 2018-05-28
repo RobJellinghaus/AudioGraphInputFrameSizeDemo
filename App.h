@@ -38,9 +38,14 @@ struct App : winrt::Windows::UI::Xaml::ApplicationT<App>
     // I claim the code which populates the audio input frame is free of phase errors or buffer errors that would
     // cause clicking or popping.  I encourage reviewers to validate this claim; it's the entire point of this sample,
     // to root-cause the audible clicking/popping issues with shorter frame sizes.
-    //
-    // The top and bottom frequencies can be changed to be the same in order to avoid any confusion or bugs
-    // relating to frequency change.
+
+public: // constants
+    // Minimum frequency (and starting frequency as it happens).
+    const uint32_t MinimumFrequencyHz = 300;
+    // Maximum frequency.
+    const uint32_t MaximumFrequencyHz = 900;
+    // Time to cycle from min to max. Also time to cycle from max back to min.
+    const uint32_t CycleTimeSecs = 4;
 
 public: // UI controls
     winrt::Windows::UI::Xaml::Controls::TextBlock _textBlockGraphStatus{ nullptr };
@@ -59,7 +64,10 @@ public: // threading
     winrt::apartment_context _uiThread;
 
 public: // sound generation
-    // current phase of sine wave -- ranges from 0 to 2*pi
+    // Current frequency of sine wave -- updated by audio graph quantum.
+    double _sineWaveFrequency;
+
+    // Current phase of sine wave; ranges from 0 to 2*pi.
     double _sineWavePhase;
 
     // sample rate of audio graph
@@ -69,6 +77,9 @@ public: // sound generation
 
     // Total sample count measured by audio graph quantumstarted events * audio graph required samples.
     uint32_t _audioGraphQuantumSampleCount;
+
+    // The number of QuantumStarted events we've received from the audio graph.
+    uint32_t _audioGraphQuantumCount;
 
     // Total sample count measured by required samples for audio frame input node.
     uint32_t _audioInputFrameSampleCount;

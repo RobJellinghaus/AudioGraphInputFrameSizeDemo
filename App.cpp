@@ -103,6 +103,7 @@ fire_and_forget App::LaunchedAsync()
     Check(_channelCount == 2);
 
     _audioGraph = audioGraph;
+    _audioGraphQuantumCount = 0;
 
     _bytesPerSample = sizeof(float) * _channelCount;
 
@@ -118,7 +119,9 @@ fire_and_forget App::LaunchedAsync()
     wstr << samplesPerQuantum;
     _minimumAudioFrameSize.Text(wstr.str());
     _audioFrameSizeSlider.Minimum(samplesPerQuantum);
+    _audioInputFrameLengthInSamples = samplesPerQuantum;
     _audioFrameSizeSlider.Maximum(_sampleRateHz * 2);
+    _audioFrameSizeSlider.Value(samplesPerQuantum);
     wstr = std::wstringstream{};
     wstr << _audioFrameSizeSlider.Maximum();
     _maximumAudioFrameSize.Text(wstr.str());
@@ -134,6 +137,7 @@ fire_and_forget App::LaunchedAsync()
     _audioGraph.QuantumStarted([&](AudioGraph, IInspectable)
     {
         _audioGraphQuantumSampleCount += samplesPerQuantum;
+        _audioGraphQuantumCount++;
     });
 
     audioGraph.Start();
@@ -174,10 +178,11 @@ fire_and_forget App::UpdateLoop()
         _audioInputFrameLengthInSamples = (uint32_t)_audioFrameSizeSlider.Value();
 
         std::wstringstream wstr{};
-        wstr << "Audio input frame length (samples): " << _audioInputFrameLengthInSamples
-            << " | Audio graph sample count: " << _audioGraphQuantumSampleCount
-            << " | Input frame sample count: " << _audioInputFrameSampleCount
-            << " | Zero byte frame count: " << _zeroByteOutgoingFrameCount;
+        wstr << "Input frame length: " << _audioInputFrameLengthInSamples
+            << " | Audio graph quanta: " << _audioGraphQuantumCount
+            << " | Audio graph samples: " << _audioGraphQuantumSampleCount
+            << " | Input frame samples: " << _audioInputFrameSampleCount
+            << " | Zero frame count: " << _zeroByteOutgoingFrameCount;
         _textBlockTimeInfo.Text(wstr.str());
 
         co_await resume_background();
@@ -197,8 +202,6 @@ void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNo
         return;
     }
 
-    _audioInputFrameSampleCount += requiredSamples;
-
     DateTime dateTimeNow = DateTime::clock::now();
     TimeSpan sinceLast = dateTimeNow - _lastQuantumTime;
     _lastQuantumTime = dateTimeNow;
@@ -208,7 +211,8 @@ void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNo
     // _requiredSamplesHistogram.Add(requiredSamples);
     // _sinceLastSampleTimingHistogram.Add(samplesSinceLastQuantum);
 
-    uint32_t frameSizeInSamples = requiredSamples; // TODO: fix: _audioInputFrameLengthInSamples;
+    uint32_t frameSizeInSamples = _audioInputFrameLengthInSamples;
+    _audioInputFrameSampleCount += frameSizeInSamples;
 
     // Stereo float samples outbound in this audio frame.
     Windows::Media::AudioFrame audioFrame(frameSizeInSamples * sizeof(float) * _channelCount);
@@ -239,6 +243,10 @@ void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNo
             // set both stereo channels to same sine value
             data[i * 2] = data[i * 2 + 1] = (float)sin(_sineWavePhase);
             _sineWavePhase += phaseIncrement;
+            if (_sineWavePhase > 2 * pi)
+            {
+                _sineWavePhase -= 2 * pi;
+            }
         }
     }
 
