@@ -94,9 +94,13 @@ fire_and_forget App::LaunchedAsync()
     // (If just instance variable, it would become inaccessible.)
     AudioGraph audioGraph = result.Graph();
     int latencyInSamples = audioGraph.LatencyInSamples();
-    int samplesPerQuantum = audioGraph.SamplesPerQuantum();
+    _samplesPerQuantum = audioGraph.SamplesPerQuantum();
     _sampleRateHz = audioGraph.EncodingProperties().SampleRate();
     _channelCount = audioGraph.EncodingProperties().ChannelCount();
+
+    _audioGraphQuantumCount = 0;
+    _audioGraphQuantumSampleCount = 0;
+
     // make sure we're float encoding
     Check(audioGraph.EncodingProperties().BitsPerSample() == sizeof(float) * 8);
     // make sure we're stereo output (only mode supported for this tiny demo)
@@ -112,16 +116,16 @@ fire_and_forget App::LaunchedAsync()
     std::wstringstream wstr;
     wstr << L"Sample rate: " << _sampleRateHz
         << L"| Latency in samples: " << latencyInSamples
-        << " | Samples per quantum: " << samplesPerQuantum;
+        << " | Samples per quantum: " << _samplesPerQuantum;
     _textBlockGraphInfo.Text(wstr.str());
 
     wstr = std::wstringstream{};
-    wstr << samplesPerQuantum;
+    wstr << _samplesPerQuantum;
     _minimumAudioFrameSize.Text(wstr.str());
-    _audioFrameSizeSlider.Minimum(samplesPerQuantum);
-    _audioInputFrameLengthInSamples = samplesPerQuantum;
+    _audioFrameSizeSlider.Minimum(_samplesPerQuantum);
+    _audioInputFrameLengthInSamples = _samplesPerQuantum;
     _audioFrameSizeSlider.Maximum(_sampleRateHz * 2);
-    _audioFrameSizeSlider.Value(samplesPerQuantum);
+    _audioFrameSizeSlider.Value(_samplesPerQuantum);
     wstr = std::wstringstream{};
     wstr << _audioFrameSizeSlider.Maximum();
     _maximumAudioFrameSize.Text(wstr.str());
@@ -136,8 +140,27 @@ fire_and_forget App::LaunchedAsync()
 
     _audioGraph.QuantumStarted([&](AudioGraph, IInspectable)
     {
-        _audioGraphQuantumSampleCount += samplesPerQuantum;
+        _audioGraphQuantumSampleCount += _samplesPerQuantum;
         _audioGraphQuantumCount++;
+
+        // kenneth, what is the frequency
+        const double sineWaveFrequencyChange = ((float)_samplesPerQuantum / _sampleRateHz) / FrequencyCycleTimeSecs * (MaximumFrequencyHz - MinimumFrequencyHz);
+        if (_isSineWaveFrequencyDescending)
+        {
+            _sineWaveFrequency -= sineWaveFrequencyChange;
+            if (_sineWaveFrequency < MinimumFrequencyHz)
+            {
+                _isSineWaveFrequencyDescending = false;
+            }
+        }
+        else
+        {
+            _sineWaveFrequency += sineWaveFrequencyChange;
+            if (_sineWaveFrequency > MaximumFrequencyHz)
+            {
+                _isSineWaveFrequencyDescending = true;
+            }
+        }
     });
 
     audioGraph.Start();
@@ -182,7 +205,8 @@ fire_and_forget App::UpdateLoop()
             << " | Audio graph quanta: " << _audioGraphQuantumCount
             << " | Audio graph samples: " << _audioGraphQuantumSampleCount
             << " | Input frame samples: " << _audioInputFrameSampleCount
-            << " | Zero frame count: " << _zeroByteOutgoingFrameCount;
+            << " | Zero frame count: " << _zeroByteOutgoingFrameCount
+            << " | Sine wave frequency: " << _sineWaveFrequency;
         _textBlockTimeInfo.Text(wstr.str());
 
         co_await resume_background();
@@ -235,9 +259,11 @@ void App::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNo
 
         float* data = (float*)dataInBytes;
         const double amplitude = 0.8;
-        const int frequencyHz = 300;
         const double pi = std::acos(-1);
-        const double phaseIncrement = frequencyHz * 2 * pi / _sampleRateHz;
+        // The current frequency only affects the change in phase; it does not actually alter the phase
+        // at any point. So there should never be any audible clicks or pops as a result of a frequency
+        // change here.
+        const double phaseIncrement = _sineWaveFrequency * 2 * pi / _sampleRateHz;
         for (uint32_t i = 0; i < frameSizeInSamples; i++)
         {
             // set both stereo channels to same sine value

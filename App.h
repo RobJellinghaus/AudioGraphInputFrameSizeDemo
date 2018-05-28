@@ -45,7 +45,7 @@ public: // constants
     // Maximum frequency.
     const uint32_t MaximumFrequencyHz = 900;
     // Time to cycle from min to max. Also time to cycle from max back to min.
-    const uint32_t CycleTimeSecs = 4;
+    const uint32_t FrequencyCycleTimeSecs = 4;
 
 public: // UI controls
     winrt::Windows::UI::Xaml::Controls::TextBlock _textBlockGraphStatus{ nullptr };
@@ -70,10 +70,15 @@ public: // sound generation
     // Current phase of sine wave; ranges from 0 to 2*pi.
     double _sineWavePhase;
 
+    // Is sine wave frequency descending?  (If not, it's ascending.)
+    bool _isSineWaveFrequencyDescending;
+
     // sample rate of audio graph
     uint32_t _sampleRateHz;
     // channel count of audio graph
     uint32_t _channelCount;
+    // samples per quantum of audio graph
+    uint32_t _samplesPerQuantum;
 
     // Total sample count measured by audio graph quantumstarted events * audio graph required samples.
     uint32_t _audioGraphQuantumSampleCount;
