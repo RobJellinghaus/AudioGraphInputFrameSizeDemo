@@ -75,12 +75,13 @@ private: // sound/frequency state
     // user can set whether frequency is changing or not
     bool _isSineWaveFrequencyChanging;
 
-public: // properties
-    winrt::Windows::UI::Xaml::Controls::StackPanel Panel() const { return _stackPanel; }
-
 public:
     // Tones must be constructed from the UI context.
     Tone(const App* app);
+
+    Tone() = delete;
+
+    ~Tone();
 
     // Must be called from the ui context.
     void UpdateUI();
@@ -154,6 +155,8 @@ public: // properties
     uint32_t ChannelCount() const { return _channelCount; }
     uint32_t SamplesPerQuantum() const { return _samplesPerQuantum; }
     uint32_t BytesPerSample() const { return _bytesPerSample; }
+
+    winrt::Windows::UI::Xaml::Controls::StackPanel Panel() const { return _stackPanel; }
 
 public: // application implementation
     winrt::fire_and_forget LaunchedAsync();

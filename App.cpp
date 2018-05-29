@@ -40,6 +40,7 @@ void Check(bool condition)
 
 Tone::Tone(const App* app)    
     : _app{ app },
+    _audioFrameInputNode{ app->Graph().CreateFrameInputNode() },
     _isSineWaveFrequencyDescending{ false },
     _isSineWaveFrequencyChanging{ true },
     _sineWaveFrequency{ (double)MinimumFrequencyHz },
@@ -79,7 +80,6 @@ Tone::Tone(const App* app)
 
     // Create the frame input node AFTER the graph has started.
     // (This is the scenario used by the app I'm writing, which has to work free of crackling/static issues in playback.)
-    _audioFrameInputNode = _app->Graph().CreateFrameInputNode();
     _audioFrameInputNode.QuantumStarted([&](AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
     {
         FrameInputNode_QuantumStarted(sender, args);
@@ -88,6 +88,13 @@ Tone::Tone(const App* app)
 
     Check(_audioFrameInputNode.EncodingProperties().SampleRate() == _app->SampleRateHz());
     Check(_audioFrameInputNode.EncodingProperties().ChannelCount() == _app->ChannelCount());
+
+    _app->Panel().Children().Append(_stackPanel);
+}
+
+Tone::~Tone()
+{
+    Check(false);
 }
 
 void Tone::UpdateUI()
@@ -106,9 +113,8 @@ void Tone::UpdateUI()
 
 void Tone::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
 {
-    Check(sender == _audioFrameInputNode);
+    // Check(sender == _audioFrameInputNode);
 
-    Check(args.RequiredSamples() >= 0);
     uint32_t requiredSamples = (uint32_t)args.RequiredSamples();
 
     if (requiredSamples == 0)
@@ -215,6 +221,10 @@ fire_and_forget App::LaunchedAsync()
     apartment_context ui_thread{};
     _uiThread = ui_thread;
 
+    // Save a reference to this explicitly, to carry through all the coroutines below down to the final
+    // creation of a Tone.
+    App* app = this;
+
     AudioGraphSettings settings(AudioRenderCategory::Media);
     settings.QuantumSizeSelectionMode(Windows::Media::Audio::QuantumSizeSelectionMode::LowestLatency);
     settings.DesiredRenderDeviceAudioProcessing(Windows::Media::AudioProcessing::Raw);
@@ -250,7 +260,7 @@ fire_and_forget App::LaunchedAsync()
 
     Check(deviceOutputNodeResult.Status() == AudioDeviceNodeCreationStatus::Success);
 
-    AudioDeviceOutputNode deviceOutputNode = deviceOutputNodeResult.DeviceOutputNode();
+    _audioDeviceOutputNode = deviceOutputNodeResult.DeviceOutputNode();
 
     _audioGraph.QuantumStarted([&](AudioGraph, IInspectable)
     {
@@ -265,7 +275,8 @@ fire_and_forget App::LaunchedAsync()
     co_await _uiThread;
     _textBlockGraphStatus.Text(L"Graph started");
 
-    _tones.push_back(std::unique_ptr<Tone>(new Tone(this)));
+    std::unique_ptr<Tone> newTone(new Tone(app));
+    _tones.push_back(std::move(newTone));
 
     co_await resume_background();
 
@@ -293,7 +304,7 @@ fire_and_forget App::UpdateLoop()
             << " | Graph sample count: " << _audioGraphQuantumSampleCount;
         _textBlockGraphInfo.Text(wstr.str());
 
-        for (std::unique_ptr<Tone>& tone : _tones)
+        for (const std::unique_ptr<Tone>& tone : _tones)
         {
             tone.get()->UpdateUI();
         }
