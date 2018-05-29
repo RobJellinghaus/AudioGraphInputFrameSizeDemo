@@ -44,7 +44,9 @@ Tone::Tone(const App* app)
     _isSineWaveFrequencyDescending{ false },
     _isSineWaveFrequencyChanging{ true },
     _sineWaveFrequency{ (double)MinimumFrequencyHz },
-    _sineWavePhase{ 0 }
+    _sineWavePhase{ 0 },
+    _audioInputFrameSampleCount{ 0 },
+    _zeroByteOutgoingFrameCount{ 0 }
 {
     _stackPanel = StackPanel{};
 
@@ -55,13 +57,14 @@ Tone::Tone(const App* app)
     _minimumAudioFrameSize = TextBlock{};
     _stackPanel.Children().Append(_minimumAudioFrameSize);
     _audioFrameSizeSlider = Slider{};
-    _audioFrameSizeSlider.MinWidth(300);
+    _audioFrameSizeSlider.MinWidth(150);
     _stackPanel.Children().Append(_audioFrameSizeSlider);
     _maximumAudioFrameSize = TextBlock{};
     _stackPanel.Children().Append(_maximumAudioFrameSize);
     _checkBoxLabel = TextBlock{};
     _stackPanel.Children().Append(_checkBoxLabel);
     _checkBox = CheckBox();
+    _checkBox.MaxWidth(50);
     _stackPanel.Children().Append(_checkBox);
     _postTextBlock = TextBlock{};
     _stackPanel.Children().Append(_postTextBlock);
