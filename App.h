@@ -86,7 +86,10 @@ public:
     // Must be called from the ui context.
     void UpdateUI();
 
-    // The quantum has started; consume input audio for this recording.
+    // Called on every audio graph quantum, for adjusting frequency.
+    void AudioGraph_QuantumStarted();
+
+    // The quantum has started; generate input audio for this Tone.
     void FrameInputNode_QuantumStarted(
         winrt::Windows::Media::Audio::AudioFrameInputNode sender,
         winrt::Windows::Media::Audio::FrameInputNodeQuantumStartedEventArgs args);

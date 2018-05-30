@@ -64,7 +64,7 @@ Tone::Tone(const App* app)
     _checkBoxLabel = TextBlock{};
     _stackPanel.Children().Append(_checkBoxLabel);
     _checkBox = CheckBox();
-    _checkBox.MaxWidth(50);
+    _checkBox.MaxWidth(20);
     _stackPanel.Children().Append(_checkBox);
     _postTextBlock = TextBlock{};
     _stackPanel.Children().Append(_postTextBlock);
@@ -79,7 +79,7 @@ Tone::Tone(const App* app)
     wstr = std::wstringstream{};
     wstr << _audioFrameSizeSlider.Maximum();
     _maximumAudioFrameSize.Text(wstr.str());
-    _checkBoxLabel.Text(L"Change frequency? ");
+    _checkBoxLabel.Text(L"Change frequency?");
 
     // Create the frame input node AFTER the graph has started.
     // (This is the scenario used by the app I'm writing, which has to work free of crackling/static issues in playback.)
@@ -107,25 +107,18 @@ void Tone::UpdateUI()
     _isSineWaveFrequencyChanging = _checkBox.IsChecked().Value();
 
     std::wstringstream wstr{};
-    wstr << "Input frame length: " << _audioInputFrameLengthInSamples
-        << " | Input frame samples: " << _audioInputFrameSampleCount
-        << " | Zero frame count: " << _zeroByteOutgoingFrameCount
-        << " | Sine wave frequency: " << _sineWaveFrequency;
+    wstr << "Audio frame length: " << _audioInputFrameLengthInSamples
+        << " | Input samples: " << _audioInputFrameSampleCount
+        << " | Zero count: " << _zeroByteOutgoingFrameCount
+        << " | Frequency: " << _sineWaveFrequency;
     _postTextBlock.Text(wstr.str());
 }
 
-void Tone::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
+// Adjust the frequency on every audio quantum.  The frequency change isn't audible
+// except at audio frame boundaries, but if the audio frame is set to minimum size,
+// the frequency change will be maximally smooth (audibly speaking).
+void Tone::AudioGraph_QuantumStarted()
 {
-    // Check(sender == _audioFrameInputNode);
-
-    uint32_t requiredSamples = (uint32_t)args.RequiredSamples();
-
-    if (requiredSamples == 0)
-    {
-        _zeroByteOutgoingFrameCount++;
-        return;
-    }
-
     // kenneth, what is the frequency
     const double sineWaveFrequencyChange = ((double)_app->SamplesPerQuantum() / _app->SampleRateHz())
         / FrequencyCycleTimeSecs
@@ -150,11 +143,20 @@ void Tone::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputN
             }
         }
     }
+}
 
-    // we are looping; let's play!
-    // float samplesSinceLastQuantum = (float)sinceLast.count() * _sampleRateHz / TicksPerSecond;
-    // _requiredSamplesHistogram.Add(requiredSamples);
-    // _sinceLastSampleTimingHistogram.Add(samplesSinceLastQuantum);
+// Generate the actual sine wave frequency to fill the current size of audio frame.
+void Tone::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
+{
+    // Check(sender == _audioFrameInputNode);
+
+    uint32_t requiredSamples = (uint32_t)args.RequiredSamples();
+
+    if (requiredSamples == 0)
+    {
+        _zeroByteOutgoingFrameCount++;
+        return;
+    }
 
     uint32_t frameSizeInSamples = _audioInputFrameLengthInSamples;
     _audioInputFrameSampleCount += frameSizeInSamples;
@@ -270,6 +272,10 @@ fire_and_forget App::LaunchedAsync()
         _audioGraphQuantumSampleCount += _samplesPerQuantum;
         _audioGraphQuantumCount++;
 
+        for (const std::unique_ptr<Tone>& tone : _tones)
+        {
+            tone.get()->AudioGraph_QuantumStarted();
+        }
     });
 
     _audioGraph.Start();
@@ -301,7 +307,7 @@ fire_and_forget App::UpdateLoop()
         // switch to UI thread to update UI, now that we know the audio graph's state
         std::wstringstream wstr;
         wstr << L"Sample rate: " << _sampleRateHz
-            << L"| Latency in samples: " << _latencyInSamples
+            << L"Hz | Latency in samples: " << _latencyInSamples
             << " | Samples per quantum: " << _samplesPerQuantum
             << " | Graph quantum count: " << _audioGraphQuantumCount
             << " | Graph sample count: " << _audioGraphQuantumSampleCount;
