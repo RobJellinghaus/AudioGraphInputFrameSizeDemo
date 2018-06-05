@@ -121,6 +121,8 @@ private: // UI controls
 
     winrt::Windows::UI::Xaml::Controls::StackPanel _stackPanel{ nullptr };
 
+    // there is only ever one Tone right at the moment, but it wouldn't be hard to add more...
+    // code is mostly written, but not necessary for demoing the issue that motivated this app
     std::vector<std::unique_ptr<Tone>> _tones{};
 
 private: // threading
