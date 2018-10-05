@@ -14,7 +14,7 @@ struct __declspec(uuid("5b0d3235-4dba-4d44-865e-8f1d0e4fd04d")) __declspec(novta
 
 const int TicksPerSecond = 10000000;
 
-winrt::Windows::Foundation::TimeSpan timeSpanFromSeconds(int seconds);
+// winrt::Windows::Foundation::TimeSpan timeSpanFromSeconds(int seconds);
 
 // release assertion, basically
 void Check(bool condition);
@@ -70,7 +70,7 @@ private: // sound/frequency state
     // But it evidently is, as this variable indicates.
     int _zeroByteOutgoingFrameCount;
 
-    winrt::Windows::Media::Audio::AudioFrameInputNode _audioFrameInputNode{ nullptr };
+    // winrt::Windows::Media::Audio::AudioFrameInputNode _audioFrameInputNode{ nullptr };
 
     // user can set whether frequency is changing or not
     bool _isSineWaveFrequencyChanging;
@@ -87,12 +87,14 @@ public:
     void UpdateUI();
 
     // Called on every audio graph quantum, for adjusting frequency.
-    void AudioGraph_QuantumStarted();
+    // void AudioGraph_QuantumStarted();
 
     // The quantum has started; generate input audio for this Tone.
+	/*
     void FrameInputNode_QuantumStarted(
         winrt::Windows::Media::Audio::AudioFrameInputNode sender,
         winrt::Windows::Media::Audio::FrameInputNodeQuantumStartedEventArgs args);
+	*/
 };
 
 // Simple application which generates a sine wave at a fixed frequency, while changing the audio frame size.
@@ -149,12 +151,12 @@ private: // sound generation
     // bytes per sample (channel count * sample size in bytes)
     uint32_t _bytesPerSample;
 
-    winrt::Windows::Media::Audio::AudioGraph _audioGraph{ nullptr };
-    winrt::Windows::Media::Audio::AudioDeviceOutputNode _audioDeviceOutputNode{ nullptr };
+    // winrt::Windows::Media::Audio::AudioGraph _audioGraph{ nullptr };
+    // winrt::Windows::Media::Audio::AudioDeviceOutputNode _audioDeviceOutputNode{ nullptr };
 
 public: // properties
-    winrt::Windows::Media::Audio::AudioGraph Graph() const { return _audioGraph; }
-    winrt::Windows::Media::Audio::AudioDeviceOutputNode OutputNode() const { return _audioDeviceOutputNode; }
+    // winrt::Windows::Media::Audio::AudioGraph Graph() const { return _audioGraph; }
+    // winrt::Windows::Media::Audio::AudioDeviceOutputNode OutputNode() const { return _audioDeviceOutputNode; }
 
     uint32_t SampleRateHz() const { return _sampleRateHz; }
     uint32_t ChannelCount() const { return _channelCount; }

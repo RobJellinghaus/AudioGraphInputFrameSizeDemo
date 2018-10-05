@@ -15,8 +15,6 @@ using namespace Windows::ApplicationModel::Activation;
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::Foundation;
 using namespace Windows::Media;
-using namespace Windows::Media::Audio;
-using namespace Windows::Media::Render;
 using namespace Windows::UI::Core;
 using namespace Windows::UI::Composition;
 using namespace Windows::UI::Xaml;
@@ -40,7 +38,7 @@ void Check(bool condition)
 
 Tone::Tone(const App* app)    
     : _app{ app },
-    _audioFrameInputNode{ app->Graph().CreateFrameInputNode() },
+    // _audioFrameInputNode{ app->Graph().CreateFrameInputNode() },
     _isSineWaveFrequencyDescending{ false },
     _isSineWaveFrequencyChanging{ true },
     _sineWaveFrequency{ (double)MinimumFrequencyHz },
@@ -83,6 +81,7 @@ Tone::Tone(const App* app)
 
     // Create the frame input node AFTER the graph has started.
     // (This is the scenario used by the app I'm writing, which has to work free of crackling/static issues in playback.)
+	/*
     _audioFrameInputNode.QuantumStarted([&](AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
     {
         FrameInputNode_QuantumStarted(sender, args);
@@ -91,6 +90,7 @@ Tone::Tone(const App* app)
 
     Check(_audioFrameInputNode.EncodingProperties().SampleRate() == _app->SampleRateHz());
     Check(_audioFrameInputNode.EncodingProperties().ChannelCount() == _app->ChannelCount());
+	*/
 
     _app->Panel().Children().Append(_stackPanel);
 }
@@ -117,6 +117,7 @@ void Tone::UpdateUI()
 // Adjust the frequency on every audio quantum.  The frequency change isn't audible
 // except at audio frame boundaries, but if the audio frame is set to minimum size,
 // the frequency change will be maximally smooth (audibly speaking).
+/*
 void Tone::AudioGraph_QuantumStarted()
 {
     // kenneth, what is the frequency
@@ -144,8 +145,10 @@ void Tone::AudioGraph_QuantumStarted()
         }
     }
 }
+*/
 
 // Generate the actual sine wave frequency to fill the current size of audio frame.
+/*
 void Tone::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputNodeQuantumStartedEventArgs args)
 {
     // Check(sender == _audioFrameInputNode);
@@ -201,6 +204,7 @@ void Tone::FrameInputNode_QuantumStarted(AudioFrameInputNode sender, FrameInputN
 
     sender.AddFrame(audioFrame);
 }
+*/
 
 void App::OnLaunched(LaunchActivatedEventArgs const&)
 {
@@ -230,7 +234,8 @@ fire_and_forget App::LaunchedAsync()
     // creation of a Tone.
     App* app = this;
 
-    AudioGraphSettings settings(AudioRenderCategory::Media);
+    /*
+	AudioGraphSettings settings(AudioRenderCategory::Media);
     settings.QuantumSizeSelectionMode(Windows::Media::Audio::QuantumSizeSelectionMode::LowestLatency);
     settings.DesiredRenderDeviceAudioProcessing(Windows::Media::AudioProcessing::Raw);
     // leaving PrimaryRenderDevice uninitialized will use default output device
@@ -245,14 +250,15 @@ fire_and_forget App::LaunchedAsync()
     _samplesPerQuantum = _audioGraph.SamplesPerQuantum();
     _sampleRateHz = _audioGraph.EncodingProperties().SampleRate();
     _channelCount = _audioGraph.EncodingProperties().ChannelCount();
+	*/
 
     _audioGraphQuantumCount = 0;
     _audioGraphQuantumSampleCount = 0;
 
     // make sure we're float encoding
-    Check(_audioGraph.EncodingProperties().BitsPerSample() == sizeof(float) * 8);
+    // Check(_audioGraph.EncodingProperties().BitsPerSample() == sizeof(float) * 8);
     // make sure we're stereo output (only mode supported for this tiny demo)
-    Check(_channelCount == 2);
+    // Check(_channelCount == 2);
 
     _audioGraphQuantumCount = 0;
 
@@ -261,6 +267,7 @@ fire_and_forget App::LaunchedAsync()
     co_await resume_background();
 
     // Create a device output node
+	/*
     CreateAudioDeviceOutputNodeResult deviceOutputNodeResult = co_await _audioGraph.CreateDeviceOutputNodeAsync();
 
     Check(deviceOutputNodeResult.Status() == AudioDeviceNodeCreationStatus::Success);
@@ -279,6 +286,7 @@ fire_and_forget App::LaunchedAsync()
     });
 
     _audioGraph.Start();
+	*/
 
     // This must be called on the UI thread.
     co_await _uiThread;
